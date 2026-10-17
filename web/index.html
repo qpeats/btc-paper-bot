@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BTC Paper Bot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one column console — run bar, verdict, numbers, price chart, trade ledger, raw report. */
+:root {
+  /* brand palette */
+  --ultraviolet: #8D00FF; --brand-violet: #601FEB; --orchid: #C76CFF; --deep-iris: #5F46AC;
+  --lavender-mist: #FAF5FF; --periwinkle: #8D99FF; --blush: #F5B9EA; --coral: #FF6778;
+  --aubergine: #1F1A35; --volt-lime: #E5FF13; --electric-cyan: #1BF4F0; --ink: #000000;
+  --graphite: #1F2937; --slate: #6B7280;
+
+  /* roles — light */
+  --bg: var(--lavender-mist);
+  --panel: #FFFFFF;
+  --fg: var(--aubergine);
+  --muted: var(--slate);
+  --line: #E7DDF7;
+  --accent: var(--brand-violet);
+  --chart-line: var(--deep-iris);
+  --chart-fill: rgba(141, 153, 255, .18);
+  --buy: var(--brand-violet);
+  --sell: var(--coral);
+  --gain: #0B8A87;            /* Electric cyan, deepened for text on light */
+  --loss: #D93A4E;            /* Coral, deepened for text on light */
+  --pass-bg: var(--volt-lime); --pass-fg: var(--ink);
+  --fail-bg: var(--coral);     --fail-fg: var(--ink);
+  --code-bg: var(--aubergine); --code-fg: var(--lavender-mist);
+  --focus: var(--ultraviolet);
+
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: var(--aubergine); --panel: #29223F; --fg: var(--lavender-mist); --muted: #B4ACD3;
+    --line: #3A3157; --accent: var(--orchid); --chart-line: var(--periwinkle);
+    --chart-fill: rgba(141, 153, 255, .14); --buy: var(--electric-cyan); --sell: var(--coral);
+    --gain: var(--volt-lime); --loss: var(--coral); --code-bg: #141024; --code-fg: var(--lavender-mist);
+    --focus: var(--electric-cyan); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: var(--aubergine); --panel: #29223F; --fg: var(--lavender-mist); --muted: #B4ACD3;
+  --line: #3A3157; --accent: var(--orchid); --chart-line: var(--periwinkle);
+  --chart-fill: rgba(141, 153, 255, .14); --buy: var(--electric-cyan); --sell: var(--coral);
+  --gain: var(--volt-lime); --loss: var(--coral); --code-bg: #141024; --code-fg: var(--lavender-mist);
+  --focus: var(--electric-cyan); color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 400 15px/1.55 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 20px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* ---------- header / run bar ---------- */
+.hero {
+  margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  padding-inline: max(16px, env(safe-area-inset-left, 0px));
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(199,108,255,.55) 0%, transparent 55%),
+    radial-gradient(90% 120% at 0% 100%, rgba(27,244,240,.22) 0%, transparent 60%),
+    linear-gradient(135deg, var(--aubergine) 0%, #2C1C5C 60%, var(--deep-iris) 100%);
+  color: var(--lavender-mist);
+}
+.hero-in { max-width: 1040px; margin: 0 auto; padding-block: 36px 32px; display: grid; gap: 18px; }
+.eyebrow { font: 600 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--electric-cyan); }
+h1 { font: 800 clamp(34px, 6vw, 56px)/1.02 var(--display); letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+h1 .tick { color: var(--volt-lime); }
+.lede { margin: 0; max-width: 62ch; color: #DCD3F5; }
+.runrow { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; }
+.run {
+  appearance: none; border: 0; cursor: pointer; border-radius: 999px;
+  padding: 16px 30px; font: 700 17px/1 var(--display); letter-spacing: .01em;
+  color: var(--ink); background: var(--volt-lime);
+  box-shadow: 0 0 0 0 rgba(229,255,19,.5), 0 10px 30px -10px rgba(229,255,19,.6);
+  transition: transform .12s ease, box-shadow .2s ease, background .2s ease;
+  display: inline-flex; align-items: center; gap: 10px; min-height: 52px;
+}
+.run:hover { transform: translateY(-1px); box-shadow: 0 0 0 6px rgba(229,255,19,.18), 0 14px 34px -10px rgba(229,255,19,.7); }
+.run:active { transform: translateY(1px); }
+.run[disabled] { cursor: progress; background: var(--blush); box-shadow: none; transform: none; }
+.run .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+.run[disabled] .dot { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .2; transform: scale(.7); } }
+.status { font: 400 13px/1.4 var(--mono); color: #CFC6EE; min-height: 1.4em; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  font: 500 12px/1 var(--mono); padding: 7px 10px; border-radius: 999px;
+  background: rgba(250,245,255,.08); border: 1px solid rgba(250,245,255,.16); color: #E9E2FB;
+}
+
+/* ---------- panels ---------- */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; min-width: 0; }
+.panel h2 { font: 700 18px/1.2 var(--display); margin: 0 0 4px; letter-spacing: -.01em; }
+.panel .sub { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+
+.empty { display: grid; gap: 14px; }
+.empty ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 70ch; }
+.empty li::marker { color: var(--accent); font-weight: 600; }
+
+.error { border-color: var(--coral); }
+.error h2 { color: var(--loss); }
+.error pre { white-space: pre-wrap; font: 12px/1.5 var(--mono); color: var(--muted); margin: 8px 0 0; }
+
+/* verdict */
+.verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.pill { font: 800 14px/1 var(--display); letter-spacing: .06em; padding: 10px 16px; border-radius: 999px; text-transform: uppercase; }
+.pill.pass { background: var(--pass-bg); color: var(--pass-fg); }
+.pill.fail { background: var(--fail-bg); color: var(--fail-fg); }
+.checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 12px 6px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.check i { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font: 700 11px/1 var(--mono); font-style: normal; }
+.check.ok i { background: var(--pass-bg); color: var(--pass-fg); }
+.check.no i { background: var(--fail-bg); color: var(--fail-fg); }
+.verdict .when { margin-left: auto; font: 12px/1.4 var(--mono); color: var(--muted); }
+
+/* numbers */
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.kpi .k { font: 600 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.kpi .v { font: 800 clamp(22px, 3vw, 28px)/1.1 var(--display); font-variant-numeric: tabular-nums; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.kpi .n { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gain { color: var(--gain); } .loss { color: var(--loss); }
+@media (max-width: 760px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* chart */
+.chart-wrap { position: relative; }
+svg.chart { display: block; width: 100%; height: auto; }
+.chart text { fill: var(--muted); font: 11px var(--mono); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; display: inline-block; }
+.sw.line { height: 3px; background: var(--chart-line); border-radius: 2px; }
+.tip {
+  position: absolute; pointer-events: none; background: var(--code-bg); color: var(--code-fg);
+  font: 12px/1.4 var(--mono); padding: 8px 10px; border-radius: 8px; white-space: nowrap;
+  transform: translate(-50%, calc(-100% - 12px)); box-shadow: 0 8px 24px -8px rgba(0,0,0,.4);
+}
+
+/* trades */
+.table-scroll { overflow-x: auto; margin-inline: -4px; }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { font: 600 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+td { font: 13px/1.3 var(--mono); }
+th:nth-child(-n+2), td:nth-child(-n+2), th:last-child, td:last-child { text-align: left; }
+tr.tranche td { color: var(--muted); font-size: 12px; border-bottom-style: dashed; }
+.kind { font: 600 11px/1 var(--mono); padding: 4px 8px; border-radius: 999px; letter-spacing: .04em; }
+.kind.count { background: rgba(141,153,255,.22); color: var(--fg); }
+.kind.main { background: rgba(141,0,255,.16); color: var(--fg); }
+.note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+
+details.report summary { cursor: pointer; font: 700 16px/1.2 var(--display); }
+details.report pre {
+  margin: 14px 0 0; padding: 16px; border-radius: 12px; background: var(--code-bg); color: var(--code-fg);
+  font: 12px/1.5 var(--mono); overflow-x: auto; white-space: pre;
+}
+.copy { margin-top: 10px; appearance: none; border: 1px solid var(--line); background: transparent; color: var(--fg); border-radius: 999px; padding: 7px 14px; font: 500 13px var(--body); cursor: pointer; }
+.copy:hover { border-color: var(--accent); }
+
+footer { color: var(--muted); font-size: 12.5px; max-width: 75ch; }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-in">
+    <div class="eyebrow">Paper trading · BTC/USDT · strategy C3</div>
+    <h1>BTC Paper Bot<span class="tick">.</span></h1>
+    <p class="lede">Press Run to replay the last 24 hours of Bitcoin prices, minute by minute, with a $10,000 paper account. No real money is touched and no account is needed.</p>
+    <div class="runrow">
+      <button class="run" id="run" type="button"><span class="dot" aria-hidden="true"></span><span id="run-label">Run the bot</span></button>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </div>
+    <div class="meta" aria-label="Settings">
+      <span class="chip">1,440 one-minute candles</span>
+      <span class="chip">Start: $10,000</span>
+      <span class="chip">Fee 0.1% per side</span>
+      <span class="chip">Take-profit 0.3%</span>
+      <span class="chip">Add every −0.5%, max 6</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="main" style="margin-top: 24px">
+  <section class="panel empty" id="empty">
+    <h2>What happens when you press Run</h2>
+    <ol>
+      <li>The bot downloads the 1,440 closed one-minute candles for the 24 hours before now from Binance (BTC/USDT spot).</li>
+      <li>It makes four $10 round trips first, then buys 1/6 of the account and adds another sixth each time the price falls 0.5%, up to six.</li>
+      <li>It sells everything once the price reaches 0.3% above the average cost, and stops after five trades if it is more than $0.50 ahead.</li>
+      <li>You get every trade, the final balance, a buy-and-hold comparison, and the three checks: at least 5 trades, ending above $10,000, holding 0 BTC.</li>
+    </ol>
+  </section>
+
+  <section class="panel error" id="error" hidden>
+    <h2 id="error-title">Price data unavailable</h2>
+    <p id="error-text" style="margin:0"></p>
+    <pre id="error-detail"></pre>
+  </section>
+
+  <div id="results" hidden style="display:grid; gap:20px">
+    <section class="panel">
+      <div class="verdict">
+        <span class="pill" id="pill"></span>
+        <div class="checks" id="checks"></div>
+        <span class="when" id="when"></span>
+      </div>
+    </section>
+
+    <section class="kpis" id="kpis"></section>
+
+    <section class="panel">
+      <h2>Price and trades</h2>
+      <p class="sub" id="chart-sub"></p>
+      <div class="chart-wrap" id="chart-wrap"></div>
+      <div class="legend">
+        <span><i class="sw line"></i>BTC close</span>
+        <span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 L11 10 L1 10 Z" fill="var(--buy)"/></svg>Buy</span>
+        <span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 11 L11 2 L1 2 Z" fill="var(--sell)"/></svg>Sell</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Trades</h2>
+      <p class="sub">Times in UTC. * marks a limit or take-profit fill somewhere inside that minute.</p>
+      <div class="table-scroll"><table id="trades"></table></div>
+    </section>
+
+    <section class="panel">
+      <details class="report">
+        <summary>Full bot report (terminal output)</summary>
+        <pre id="report"></pre>
+        <button class="copy" id="copy" type="button">Copy report</button>
+      </details>
+    </section>
+  </div>
+
+  <footer>Simulation only. Prices are real Binance market data; trades, fees and slippage are simulated with the frozen Phase 2 rules. Clicks within the same minute show the same replay.</footer>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const usd = (x, d = 2) => "$" + Number(x).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const signed = (x, d = 2) => (x < 0 ? "−" : "+") + usd(Math.abs(x), d);
+  const pct = (x, d = 3) => (x < 0 ? "−" : "+") + Math.abs(x).toFixed(d) + "%";
+  const tone = (x) => (x > 0 ? "gain" : x < 0 ? "loss" : "");
+  const pad = (n) => String(n).padStart(2, "0");
+  const t = (ms) => { const d = new Date(ms); return `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`; };
+  const hm = (ms) => { const d = new Date(ms); return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`; };
+  const legT = (leg) => t(leg.time_ms) + (leg.how === "limit" || leg.how === "take-profit" ? "*" : "");
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  const btn = $("run"), label = $("run-label"), status = $("status");
+  let timer = null;
+
+  async function run() {
+    btn.disabled = true; label.textContent = "Running…";
+    const t0 = performance.now();
+    status.textContent = "Fetching 24 h of candles from Binance…";
+    timer = setInterval(() => {
+      const s = (performance.now() - t0) / 1000;
+      status.textContent = s > 8
+        ? `Still working (${s.toFixed(0)} s). The server may be waking up; the first run after a quiet spell can take up to a minute.`
+        : `Fetching candles and replaying 1,440 minutes… ${s.toFixed(1)} s`;
+    }, 250);
+    try {
+      const res = await fetch("/api/run", { method: "POST" });
+      let body;
+      try { body = await res.json(); } catch { throw { error: "The server sent an unreadable answer.", detail: `HTTP ${res.status}` }; }
+      if (!res.ok) throw body;
+      show(body);
+      status.textContent = `Done in ${((performance.now() - t0) / 1000).toFixed(1)} s${body.cached ? " (same minute as the last run, so the same replay)" : ""}.`;
+    } catch (e) {
+      const err = e && e.error ? e : { error: "Could not reach the bot server.", detail: String(e && e.message || e) };
+      $("results").hidden = true; $("empty").hidden = true; $("error").hidden = false;
+      $("error-title").textContent = err.error.startsWith("Price") ? "Price data unavailable" : "The run did not finish";
+      $("error-text").textContent = err.error + " Press Run again in a minute; if it keeps failing, the price feed may be blocking the server's region.";
+      $("error-detail").textContent = err.detail || "";
+      status.textContent = "Run failed.";
+    } finally {
+      clearInterval(timer); btn.disabled = false; label.textContent = "Run again";
+    }
+  }
+
+  function show(d) {
+    $("empty").hidden = true; $("error").hidden = true; $("results").hidden = false;
+    const T = d.totals, C = d.checks;
+
+    const pill = $("pill");
+    pill.className = "pill " + (C.passed ? "pass" : "fail");
+    pill.textContent = C.passed ? "Pass" : "Fail";
+    const ck = [
+      [C.trades, `At least 5 trades (${T.trades})`],
+      [C.profit, `Final balance > $10,000`],
+      [C.flat, `0 BTC held at end`],
+    ];
+    $("checks").innerHTML = ck.map(([ok, txt]) =>
+      `<span class="check ${ok ? "ok" : "no"}"><i aria-hidden="true">${ok ? "✓" : "✕"}</i>${esc(txt)}<span class="sr" style="position:absolute;left:-9999px">${ok ? "passed" : "failed"}</span></span>`).join("");
+    $("when").textContent = `Window ${t(d.window.start_ms)} → ${t(d.window.end_ms)} UTC`;
+
+    const beat = T.pnl - T.hold_pnl;
+    $("kpis").innerHTML = [
+      ["Final balance", usd(T.final_cash), `from ${usd(T.initial_cash)} · fees ${usd(T.fees)}`, ""],
+      ["Profit", signed(T.pnl), pct(T.pnl_pct, 4), tone(T.pnl)],
+      ["Trades", String(T.trades), T.stopped_at_ms ? `stopped at ${hm(T.stopped_at_ms)} UTC, target reached` : "traded the whole window", ""],
+      ["vs buy-and-hold", signed(beat), `hold: ${signed(T.hold_pnl)} · BTC ${pct(T.market_change_pct, 2)}`, tone(beat)],
+    ].map(([k, v, n, c]) => `<div class="kpi"><span class="k">${k}</span><span class="v ${c}">${esc(v)}</span><span class="n">${esc(n)}</span></div>`).join("");
+
+    $("chart-sub").textContent = `${d.source} · ${usd(T.first_open)} → ${usd(T.last_close)} (${pct(T.market_change_pct, 2)})`;
+    drawChart(d);
+    drawTrades(d);
+    $("report").textContent = d.report;
+  }
+
+  function drawChart(d) {
+    const narrow = $("chart-wrap").clientWidth < 600;
+    const W = narrow ? 560 : 1000, H = narrow ? 420 : 300, L = 64, R = 14, Tp = 14, B = 30;
+    const closes = d.closes, n = closes.length, start = d.window.start_ms;
+    const marks = [];
+    d.trades.forEach((tr) => {
+      tr.buys.forEach((b) => marks.push({ side: "buy", leg: b, tr }));
+      marks.push({ side: "sell", leg: tr.sell, tr });
+    });
+    const prices = closes.concat(marks.map((m) => m.leg.price));
+    let lo = Math.min(...prices), hi = Math.max(...prices);
+    const padP = (hi - lo) * 0.08 || hi * 0.001; lo -= padP; hi += padP;
+    const x = (i) => L + (i / (n - 1)) * (W - L - R);
+    const xt = (ms) => x(Math.min(n - 1, Math.max(0, (ms - start) / 60000)));
+    const y = (p) => Tp + (1 - (p - lo) / (hi - lo)) * (H - Tp - B);
+
+    // y ticks: 4 round values
+    const step = niceStep((hi - lo) / 4);
+    const yt = []; for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) yt.push(v);
+    // x ticks: every 4 h on the UTC clock
+    const xtks = []; const firstH = Math.ceil(start / 14400000) * 14400000;
+    for (let ms = firstH; ms <= d.window.end_ms; ms += 14400000) xtks.push(ms);
+
+    let path = "", area = "";
+    closes.forEach((c, i) => { path += (i ? "L" : "M") + x(i).toFixed(1) + " " + y(c).toFixed(1); });
+    area = path + `L${x(n - 1).toFixed(1)} ${H - B}L${x(0).toFixed(1)} ${H - B}Z`;
+
+    const grid = yt.map((v) => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${Math.round(v).toLocaleString("en-US")}</text>`).join("");
+    const xl = xtks.map((ms) => `<text x="${xt(ms)}" y="${H - 8}" text-anchor="middle">${hm(ms)}</text><line x1="${xt(ms)}" x2="${xt(ms)}" y1="${H - B}" y2="${H - B + 4}" stroke="var(--line)"/>`).join("");
+    const mk = marks.map((m, i) => {
+      const cx = xt(m.leg.time_ms), cy = y(m.leg.price), s = 6;
+      const shape = m.side === "buy"
+        ? `M${cx} ${cy + 2} l${s} ${s * 1.5} l${-2 * s} 0 Z`
+        : `M${cx} ${cy - 2} l${s} ${-s * 1.5} l${-2 * s} 0 Z`;
+      return `<path d="${shape}" fill="var(--${m.side})" stroke="var(--panel)" stroke-width="1.2" data-i="${i}" tabindex="0" style="cursor:pointer"/>`;
+    }).join("");
+    const last = `<circle cx="${x(n - 1)}" cy="${y(closes[n - 1])}" r="4" fill="var(--chart-line)" stroke="var(--panel)" stroke-width="2"/>`;
+
+    $("chart-wrap").innerHTML =
+      `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="BTC price over the 24 hour window with ${marks.length} buy and sell markers">
+        ${grid}${xl}
+        <path d="${area}" fill="var(--chart-fill)"/>
+        <path d="${path}" fill="none" stroke="var(--chart-line)" stroke-width="1.6" stroke-linejoin="round"/>
+        ${last}${mk}
+      </svg><div class="tip" id="tip" hidden></div>`;
+
+    const svg = $("chart-wrap").querySelector("svg"), tip = $("tip");
+    const showTip = (el) => {
+      const m = marks[+el.dataset.i];
+      const r = svg.getBoundingClientRect(), k = r.width / W;
+      tip.innerHTML = `#${m.tr.number} ${m.side} · ${legT(m.leg)} UTC<br>${usd(m.leg.price)} · ${m.leg.qty.toFixed(6)} BTC` +
+        (m.side === "sell" ? `<br>P&amp;L ${signed(m.tr.pnl)} (${esc(m.tr.exit_reason)})` : "");
+      tip.style.left = xt(m.leg.time_ms) * k + "px";
+      tip.style.top = y(m.leg.price) * k + "px";
+      tip.hidden = false;
+    };
+    svg.querySelectorAll("path[data-i]").forEach((el) => {
+      el.addEventListener("mouseenter", () => showTip(el));
+      el.addEventListener("focus", () => showTip(el));
+      el.addEventListener("mouseleave", () => (tip.hidden = true));
+      el.addEventListener("blur", () => (tip.hidden = true));
+    });
+  }
+
+  function niceStep(raw) {
+    const p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+    return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+  }
+
+  function drawTrades(d) {
+    const head = `<thead><tr><th>#</th><th>Type</th><th>Buy time</th><th>Avg buy</th><th>Sell time</th><th>Sell price</th><th>Size BTC</th><th>Size USD</th><th>Fees</th><th>P&amp;L</th><th>Exit</th></tr></thead>`;
+    if (!d.trades.length) { $("trades").innerHTML = head + `<tbody><tr><td colspan="11" style="text-align:left">No trades in this window.</td></tr></tbody>`; return; }
+    const rows = d.trades.map((tr) => {
+      let html = `<tr><td>${tr.number}</td><td><span class="kind ${tr.kind}">${tr.kind}</span></td>
+        <td>${legT(tr.buys[0])}</td><td>${usd(tr.avg_buy_price)}</td><td>${legT(tr.sell)}</td><td>${usd(tr.sell.price)}</td>
+        <td>${tr.qty.toFixed(8)}</td><td>${usd(tr.notional)}</td><td>${usd(tr.fees)}</td>
+        <td class="${tone(tr.pnl)}">${signed(tr.pnl)}</td><td>${esc(tr.exit_reason)}</td></tr>`;
+      if (tr.buys.length > 1) html += tr.buys.map((b, k) =>
+        `<tr class="tranche"><td></td><td>tranche ${k + 1}</td><td>${legT(b)}</td><td>${usd(b.price)}</td><td></td><td></td>
+         <td>${b.qty.toFixed(8)}</td><td>${usd(b.notional)}</td><td>${usd(b.fee)}</td><td></td><td></td></tr>`).join("");
+      return html;
+    }).join("");
+    $("trades").innerHTML = head + `<tbody>${rows}</tbody>`;
+  }
+
+  btn.addEventListener("click", run);
+  $("copy").addEventListener("click", async () => {
+    const pre = $("report");
+    try { await navigator.clipboard.writeText(pre.textContent); $("copy").textContent = "Copied"; }
+    catch { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $("copy").textContent = "Selected, press Ctrl/Cmd+C"; }
+    setTimeout(() => ($("copy").textContent = "Copy report"), 2000);
+  });
+})();
+</script>
+</body>
+</html>

@@ -45,3 +45,26 @@ its `Install Certificates.command` once (or `pip install certifi`; the bot uses 
 - `btcbot/strategy.py` — C3 parameters, per-bar rules, replay, results
 - `btcbot/report.py` — terminal output
 - `tests/test_bot.py` — correctness tests (synthetic data)
+
+## Hosted version (one button in the browser)
+
+```bash
+python3 web/server.py        # open http://localhost:8000 and press "Run the bot"
+```
+
+`web/server.py` serves the page and runs the same `btcbot` code on `POST /api/run`
+(standard library only). Clicks within the same minute reuse that minute's replay.
+
+Deploy to Render (free):
+
+1. Push this folder to a GitHub repo.
+2. On render.com: New > Blueprint > pick the repo. `render.yaml` sets everything up
+   (Frankfurt region, because Binance refuses US servers with HTTP 451).
+3. Open the `https://<name>.onrender.com` link and press Run.
+
+The free plan sleeps after 15 idle minutes, so the first click after a pause can take up to a minute.
+Any Docker host works too: `docker build -t btc-bot . && docker run -p 8000:8000 btc-bot`.
+Run the server in Europe or Asia, not the US.
+
+Layout additions: `web/server.py` (HTTP + JSON), `web/index.html` (the page),
+`tests/test_web.py` (server tests on synthetic prices).

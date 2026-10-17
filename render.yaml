@@ -1,0 +1,13 @@
+# Render Blueprint: New > Blueprint > pick this repo. Frankfurt, because Binance refuses US servers.
+services:
+  - type: web
+    name: btc-paper-bot
+    runtime: python
+    region: frankfurt
+    plan: free
+    buildCommand: "echo no dependencies"
+    startCommand: "python web/server.py"
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
